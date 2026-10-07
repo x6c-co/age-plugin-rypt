@@ -1,0 +1,21 @@
+# Configuration for cargo-about, which the release workflow uses to write
+# LICENSE-THIRD-PARTY: the licenses of the crates built into the binary.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+    "Unlicense",
+]
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "aarch64-unknown-linux-musl",
+    "x86_64-unknown-linux-musl",
+]
+ignore-dev-dependencies = true
+ignore-build-dependencies = true

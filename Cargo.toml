@@ -1,0 +1,36 @@
+[package]
+name = "age-plugin-rypt"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "age plugin that wraps file keys with rypt.dev keys"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/x6c-co/age-plugin-rypt"
+readme = "README.md"
+keywords = ["age", "age-plugin", "encryption", "kms"]
+categories = ["command-line-utilities", "cryptography"]
+
+[dependencies]
+age-core = "0.12"
+age-plugin = "0.7"
+base64 = "0.22"
+# The `Hrp` type `age_core::primitives::bech32_encode` takes, so it must be the
+# same major version age-core itself depends on.
+bech32 = "0.11"
+chrono = "0.4"
+clap = { version = "4.6", features = ["derive"] }
+# Only to recognize the rustls errors ureq wraps in io::Error. Default features
+# off, so it adds nothing to the build: ureq already picks rustls's features.
+rustls = { version = "0.23", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Without the default gzip feature: rypt's responses are tiny, and decompression
+# would let a response grow past the size limit.
+ureq = { version = "3.4", default-features = false, features = ["rustls"] }
+uuid = "1.26"
+zeroize = "1.9"
+
+[dev-dependencies]
+age = { version = "0.12", features = ["plugin"] }
+tempfile = "3"
+tiny_http = "0.12"

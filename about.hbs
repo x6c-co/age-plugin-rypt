@@ -1,0 +1,14 @@
+Third-party software in age-plugin-rypt
+=======================================
+
+The age-plugin-rypt binary is built from the Rust crates listed below. Each
+license text is followed by the crates it covers.
+
+{{#each licenses}}
+--------------------------------------------------------------------------------
+{{{name}}}
+Used by:{{#each used_by}} {{{crate.name}}} {{{crate.version}}}{{#unless @last}},{{/unless}}{{/each}}
+
+{{{text}}}
+
+{{/each}}
