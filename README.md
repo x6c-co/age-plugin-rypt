@@ -21,14 +21,13 @@ one of these ways.
 brew install x6c-co/tap/age-plugin-rypt
 ```
 
-This also installs the `age` CLI. Use the full name as shown: Homebrew only
-loads formulae from a third-party tap once you trust them, and installing by
-full name trusts this one formula.
+This downloads the prebuilt, signed binary, and also installs the `age` CLI.
+Use the full name as shown: Homebrew only loads formulae from a third-party tap
+once you trust them, and installing by full name trusts this one formula.
 
-Like any formula without a prebuilt Homebrew bottle, it needs current Xcode
-Command Line Tools on macOS (`xcode-select --install`), or a C compiler on
-Linux. On Intel Macs, Homebrew also builds `age` and Go from source, which
-takes a while. The tarballs below need none of this.
+If Homebrew says the Command Line Tools are missing or out of date, run
+`xcode-select --install` and try again. On Intel Macs, Homebrew has no prebuilt
+`age`, so Homebrew compiles `age` from source, which takes a while.
 
 ### Prebuilt binaries
 
