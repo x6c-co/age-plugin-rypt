@@ -100,11 +100,12 @@ func tokenFrom(value string) (string, error) {
 // apiURLFrom reads the API base URL from the value of RYPT_API_URL,
 // defaulting to production, and returns it both as given and parsed.
 //
-// The SDK checks the URL too, but allows plain http to the name localhost.
-// A name is looked up, and where /etc/hosts does not list localhost, the
-// lookup goes to DNS, whose answer could send the token and the file key
-// in the clear to another machine. So plain http is allowed only to the
-// loopback addresses 127.0.0.1 and ::1, as in 0.1.0.
+// Plain http is allowed only to the loopback addresses 127.0.0.1 and ::1,
+// as in 0.1.0, and never to the name localhost. A name is looked up, and the
+// lookup can reach DNS, whose answer could send the token and the file key
+// in the clear to another machine. The SDK checks the URL by the same rule
+// since v0.2.0; this function checks first so that each problem gets the
+// plugin's own message.
 func apiURLFrom(value string) (string, *url.URL, error) {
 	if value == "" {
 		value = rypt.DefaultBaseURL
