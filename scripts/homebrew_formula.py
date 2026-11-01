@@ -13,13 +13,19 @@ import re
 import sys
 from string import Template
 
-# Homebrew's platform blocks, and the release target that serves each.
+# Homebrew's platform blocks, and the release target (<os>-<arch>, as in the
+# tarball names) that serves each.
 PLATFORMS = [
-    ("macos", "arm", "aarch64-apple-darwin"),
-    ("macos", "intel", "x86_64-apple-darwin"),
-    ("linux", "arm", "aarch64-unknown-linux-musl"),
-    ("linux", "intel", "x86_64-unknown-linux-musl"),
+    ("macos", "arm", "darwin-arm64"),
+    ("macos", "intel", "darwin-amd64"),
+    ("linux", "arm", "linux-arm64"),
+    ("linux", "intel", "linux-amd64"),
 ]
+
+# Homebrew's name for the oldest macOS the macOS binaries run on: macOS 13
+# Ventura, the oldest that Go 1.27 supports. A new Go release can raise it;
+# RELEASING.md says how to check.
+MACOS_MINIMUM = "ventura"
 
 # The test needs no token and no network: `new` and `recipient` never call
 # the rypt API. The expected recipient encodes the key id used.
@@ -66,6 +72,12 @@ def platform_blocks(version, sums, base_url):
     lines = []
     for system in ("macos", "linux"):
         lines.append(f"  on_{system} do")
+        if system == "macos":
+            # With this line, Homebrew refuses to install on an older macOS,
+            # where the binary would not run. The bare symbol means "this
+            # version or later". It is inside on_macos, so that Linux
+            # installs are not affected.
+            lines.append(f"    depends_on macos: :{MACOS_MINIMUM}")
         for block_system, cpu, target in PLATFORMS:
             if block_system != system:
                 continue
@@ -84,7 +96,7 @@ def platform_blocks(version, sums, base_url):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("version", help="the release version, such as 0.1.0")
+    parser.add_argument("version", help="the release version, such as 0.2.0")
     parser.add_argument("sums", help="the release's SHA256SUMS file")
     parser.add_argument("--repository", default="x6c-co/age-plugin-rypt")
     parser.add_argument("--base-url", help="where the tarballs are, if not the GitHub release")

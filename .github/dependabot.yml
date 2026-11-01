@@ -1,6 +1,16 @@
-# Keeps the actions in .github/workflows, which are pinned to commits, up to date.
+# Keeps the Go modules in go.mod, and the actions in .github/workflows, which
+# are pinned to commits, up to date.
 version: 2
 updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    # Wait a week after a release before proposing it, so that a compromised
+    # release is more likely to be caught first.
+    cooldown:
+      default-days: 7
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
