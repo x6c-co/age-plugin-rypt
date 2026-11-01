@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	filippo.io/age v1.3.2
-	github.com/x6c-co/rypt v0.1.0
+	github.com/x6c-co/rypt v0.2.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20261030153154-30a33513ff6d
 )
 
