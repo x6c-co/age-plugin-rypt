@@ -1,22 +1,32 @@
 # Releasing
 
-Pushing a tag such as `v0.1.0` runs `.github/workflows/release.yml`. It:
+Pushing a tag such as `v0.2.0` runs `.github/workflows/release.yml`. It:
 
 1. runs the tests (`.github/workflows/ci.yml`);
-2. builds static Linux binaries for x86_64 and arm64, and macOS binaries for
-   Apple silicon and Intel;
+2. cross-compiles all four binaries on one Linux runner with Go
+   (`CGO_ENABLED=0`, `-trimpath`, `-ldflags="-s -w"`): macOS for Apple silicon
+   and Intel, and statically linked Linux for x86_64 and arm64. It runs the
+   x86_64 Linux binary there, and the arm64 one on an arm64 runner;
 3. signs the macOS binaries with the Developer ID certificate, notarizes them
    with Apple, and runs them;
 4. publishes a GitHub release with one tarball per platform, `SHA256SUMS` and
    build provenance attestations;
-5. commits the updated formula to the Homebrew tap, `x6c-co/homebrew-tap`.
+5. asks the Go module proxy for the new version, so that
+   `go install github.com/x6c-co/age-plugin-rypt@latest` finds it at once;
+6. commits the updated formula to the Homebrew tap, `x6c-co/homebrew-tap`.
 
-Each tarball holds the binary, the README, this project's licenses, and
-`LICENSE-THIRD-PARTY`: the licenses of the crates built into the binary,
-written by [cargo-about](https://github.com/EmbarkStudios/cargo-about) from
-`about.toml` and `about.hbs`. If a new dependency brings a license that
-`about.toml` doesn't accept, the release stops; add the license there if it is
-acceptable.
+The tarballs are named `age-plugin-rypt-vX.Y.Z-<os>-<arch>.tar.gz`, where
+`<os>-<arch>` is `darwin-arm64`, `darwin-amd64`, `linux-arm64` or
+`linux-amd64`. Each holds the binary, the README, this project's licenses, and
+`LICENSE-THIRD-PARTY`, which `scripts/third-party-licenses.sh` writes. That
+file lists every Go module the binary is built from on any of the four
+platforms, with its version and the text of its license files from the module
+cache, and Go's own license, since the Go runtime and standard library are
+built into the binary. If a module has no license file, the release stops.
+The script does not judge whether a license is acceptable, so check the
+license of a new dependency before adding it. To see the file, run
+`scripts/third-party-licenses.sh` at the root of the repository; it is not
+committed.
 
 ## One-time setup
 
@@ -29,7 +39,7 @@ acceptable.
   keys.
 - **Immutable releases:** turn on release immutability (Settings > General >
   Releases) before the first release. A published release's tag and files then
-  can't be changed or replaced. The workflow publishes as its very last step,
+  can't be changed or replaced. The release job publishes as its last step,
   so a failure earlier in a run can be fixed by re-running it.
 
 ### The environments
@@ -135,12 +145,13 @@ release unsigned anyway (Homebrew installs work either way), set the repository
 variable `ALLOW_UNSIGNED_MACOS` to `true`; the release notes then say the macOS
 binaries aren't signed. Delete the variable once the secrets are set.
 
-## Before the first release
+## Dry runs
 
 Run the workflow by hand (Actions > Release > Run workflow, on `main`). This is
-a dry run. It builds every platform, signs, notarizes and runs the macOS
-binaries, packages the tarballs, generates the formula, and checks that the tap
-token can push. It publishes and commits nothing; the tarballs are left as the
+a dry run. Do one before the first release, and after changing the workflow.
+It builds every platform, signs, notarizes and runs the macOS binaries,
+packages the tarballs, generates the formula, and checks that the tap token
+can push. It publishes and commits nothing; the tarballs are left as the
 run's `release-files` artifact. Like a release, it waits for approval of the
 `release` environment before signing.
 
@@ -155,19 +166,20 @@ says Accepted.
 
 ## Each release
 
-1. Update `version` in `Cargo.toml`, and run `cargo build` to update
-   `Cargo.lock`.
+1. Update `const version` in `main.go`. `go run . --version` should then print
+   `age-plugin-rypt` and the new version.
 2. Commit and push to `main`, then tag and push the tag:
 
    ```sh
    git push origin main
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.2.0
+   git push origin v0.2.0
    ```
 
-The tag must match the version in `Cargo.toml`. A tag with a hyphen, such as
-`v0.2.0-rc.1`, publishes a prerelease and leaves the formula alone. The
-formula is never moved back to an older version.
+The tag must be `v` followed by the version that `go run . --version` prints;
+the release stops otherwise. A tag with a hyphen, such as `v0.3.0-rc.1`,
+publishes a prerelease and leaves the formula alone. The formula is never
+moved back to an older version.
 
 If the formula update fails, for example because the token expired, replace
 `HOMEBREW_TAP_TOKEN` and re-run the failed `homebrew` job.
@@ -179,20 +191,42 @@ If the formula update fails, for example because the token expired, replace
 - **Developer ID certificate:** the current one expires on 17 September 2031,
   when Apple's G2 intermediate certificate does. Make a new one before then and
   replace the two certificate secrets. Binaries already released keep working.
-- **Actions:** the workflows pin each action to a commit. Dependabot
-  (`.github/dependabot.yml`) opens a pull request when one has a new release.
-- **Weekly audit:** GitHub disables scheduled workflows in a public repository
-  after 60 days without activity. If the weekly `cargo audit` stops, re-enable
-  the CI workflow in the Actions tab.
+- **Dependencies:** the workflows pin each action to a commit. Dependabot
+  (`.github/dependabot.yml`) opens a pull request when an action or a Go
+  module in `go.mod` has a new release; for a Go module, it waits a week after
+  the release.
+- **Go:** CI and the release build with the latest Go release. The `go` line
+  in `go.mod` is the oldest Go the module supports, and the CI job "Minimum Go
+  version" builds and vets with exactly that Go.
+- **Oldest macOS:** the release builds with `go-version: stable`, so a new Go
+  release can raise the oldest macOS that the binaries run on. Go's linker
+  stamps that version into each macOS binary as `minos`. Go 1.27 stamps 13.0,
+  which is macOS 13 Ventura. Before each release, check the version. With the
+  latest Go release installed, this command shows it in Go's linker source:
+  `grep -n 'macOS *= *macVersionFlag' "$(go env GOROOT)/src/cmd/link/internal/ld/macho.go"`.
+  On a Mac, `otool -l age-plugin-rypt | grep -A4 LC_BUILD_VERSION` shows the
+  `minos` line of a built macOS binary, such as one from a dry run's
+  `release-files` artifact. If the version changed, update `MACOS_MINIMUM` in
+  `scripts/homebrew_formula.py` to Homebrew's name for that macOS (such as
+  `sonoma` for macOS 14), and the macOS versions in the README's Installation
+  section and in the CHANGELOG.
+- **Weekly audit:** the CI workflow runs
+  [govulncheck](https://go.dev/doc/tutorial/govulncheck) every week, on
+  pushes to `main`, on pull requests, and before each release (the release
+  workflow runs CI first). It reports the advisories, in the dependencies
+  and in the Go standard library, whose vulnerable code the plugin can reach;
+  update the module, or build the release with the fixed Go. GitHub disables
+  scheduled workflows in a public repository after 60 days without activity.
+  If the weekly run stops, re-enable the CI workflow in the Actions tab.
 
 ## Checking a release
 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS
-gh attestation verify age-plugin-rypt-v0.1.0-aarch64-apple-darwin.tar.gz \
+gh attestation verify age-plugin-rypt-v0.2.0-darwin-arm64.tar.gz \
   --repo x6c-co/age-plugin-rypt \
   --signer-workflow x6c-co/age-plugin-rypt/.github/workflows/release.yml \
-  --source-ref refs/tags/v0.1.0 \
+  --source-ref refs/tags/v0.2.0 \
   --deny-self-hosted-runners
 ```
 

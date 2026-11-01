@@ -13,9 +13,6 @@ on:
 permissions:
   contents: read
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   test:
     name: Test (${{ matrix.os }})
@@ -32,45 +29,79 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update \
-            --component clippy --component rustfmt
-          rustup default stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install age
+      # The latest Go release; go.mod's go line is the oldest Go the module
+      # supports, which the min-go job checks.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          check-latest: true
+      # rage, a client built on the Rust age crate, is for the "Test with
+      # rage" step below.
+      - name: Install age, and rage on macOS
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
           if [ "$RUNNER_OS" = macOS ]; then
-            brew install age
+            brew install age rage
+            rage --version
           else
             sudo apt-get update
             sudo apt-get install --yes age
           fi
           age --version
-      - run: cargo fmt --check
-      - name: Clippy
-        # Not for release tags, so that lints added by a new Rust release
+      - name: Check formatting
+        # The gofmt of the Go that the go command runs. Its errors, such as a
+        # file that doesn't parse, count as output.
+        run: |
+          out="$("$(go env GOROOT)/bin/gofmt" -l . 2>&1)" || true
+          if [ -n "$out" ]; then
+            echo "::error::These files need gofmt:"
+            echo "$out"
+            exit 1
+          fi
+      - name: Vet
+        # Not for release tags, so that checks added by a new Go release
         # can't block a release.
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-        run: cargo clippy --all-targets --locked -- --deny warnings
-      - run: cargo test --locked
+        run: go vet ./...
+      - name: Test
+        # The race detector needs cgo.
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race ./...
+      - name: Test with rage
+        # The age CLI tests again, with rage in place of age. rage is built
+        # on the Rust age crate, which reads the plugin protocol more
+        # strictly than age: after an error, for example, it waits for
+        # "done". AGE_PLUGIN_RYPT_CLI makes the tests use rage even though
+        # age is installed. The race detector needs cgo.
+        if: ${{ runner.os == 'macOS' }}
+        env:
+          CGO_ENABLED: "1"
+          AGE_PLUGIN_RYPT_CLI: rage
+        run: go test -race -count=1 ./e2e -run 'TestAgeCLI'
 
-  msrv:
-    name: Minimum Rust version
+  min-go:
+    name: Minimum Go version
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      # Use the Go that setup-go installs, and fail rather than download a
+      # newer one if go.mod asks for more.
+      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Keep in step with rust-version in Cargo.toml.
-      - name: Install Rust 1.85
-        run: rustup toolchain install 1.85 --profile minimal --no-self-update
-      - run: cargo +1.85 check --all-targets --locked
+      # The Go named by go.mod's go line.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go version
+      - run: go build ./...
+      - run: go vet ./...
 
-  audit:
+  vulncheck:
     name: Security advisories
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -78,9 +109,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-      - run: cargo install cargo-audit --locked
-      - run: cargo audit
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          check-latest: true
+      # Reports only the advisories whose vulnerable code the module can
+      # reach, in its dependencies and in the standard library.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

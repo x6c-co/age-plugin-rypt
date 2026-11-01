@@ -1,4 +1,6 @@
-/target
+# The binary that go build makes at the root.
+/age-plugin-rypt
+# Written by scripts/package-release.sh and scripts/third-party-licenses.sh.
 /dist
 /LICENSE-THIRD-PARTY
 __pycache__/

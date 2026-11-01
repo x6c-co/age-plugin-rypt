@@ -3,11 +3,12 @@
 #
 # Usage: scripts/package-release.sh VERSION ARTIFACTS OUT
 #
-# ARTIFACTS holds one directory per target, named bin-<target> and containing
-# the age-plugin-rypt binary, which is how actions/download-artifact lays out
-# the release workflow's artifacts. Each tarball unpacks to a single directory
+# ARTIFACTS holds one directory per target, named bin-<os>-<arch> and
+# containing the age-plugin-rypt binary, which is how actions/download-artifact
+# lays out the release workflow's artifacts. Each tarball,
+# age-plugin-rypt-vVERSION-<os>-<arch>.tar.gz, unpacks to a single directory
 # holding the binary, the README and the licenses, including
-# LICENSE-THIRD-PARTY, which cargo-about writes in the release workflow.
+# LICENSE-THIRD-PARTY, which scripts/third-party-licenses.sh writes.
 set -euo pipefail
 
 if [ "$#" -ne 3 ]; then
@@ -19,14 +20,14 @@ artifacts="$2"
 out="$3"
 
 targets=(
-  aarch64-apple-darwin
-  x86_64-apple-darwin
-  aarch64-unknown-linux-musl
-  x86_64-unknown-linux-musl
+  darwin-arm64
+  darwin-amd64
+  linux-arm64
+  linux-amd64
 )
 
 if [ ! -f LICENSE-THIRD-PARTY ]; then
-  echo "missing LICENSE-THIRD-PARTY: run cargo about generate about.hbs -o LICENSE-THIRD-PARTY" >&2
+  echo "missing LICENSE-THIRD-PARTY: run scripts/third-party-licenses.sh" >&2
   exit 1
 fi
 
